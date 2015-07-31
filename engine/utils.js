@@ -75,9 +75,23 @@
 		return result;
 	});
 	defObjectMethod('with', function(key, value) {
+		if (Array.isArray(key)) {
+			if (key.length === 0) { throw new Error('Need at least one key element for "with"!'); }
+			if (key.length > 1) {
+				return this.with(key[0], this[key[0]].with(key.slice(1), value));
+			}
+			key = key[0];
+		}
+
 		var result = this.clone();
 		result[key] = value;
 		return result;
+	});
+
+	defObjectMethod('without', function(key) {
+		return this.filter(function(myKey) {
+			return myKey !== key;
+		});
 	});
 
 	defObjectMethod('transpose', function(key, value) {

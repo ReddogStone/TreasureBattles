@@ -46,12 +46,6 @@ function getMousePos(canvas, evt) {
 	return { x: evt.clientX - rect.left, y: evt.clientY - rect.top };
 }
 
-var renderScriptUrls = [
-	'game/assets/render-scripts/star.js',
-	'game/assets/render-scripts/cloud.js',
-	'game/assets/render-scripts/text.js'
-];
-
 function loadScriptCache() {
 	return function(callback) {
 		var result = {};
@@ -75,48 +69,12 @@ function loadScriptCache() {
 }
 
 function onload() {
-	var renderScriptCache = {};
-	renderScriptUrls.forEach(function(url) {
-		ScriptLoader.load(url, {}, function(err, script, cache) {
-			if (err) {
-				return console.log(err);
-			}
-			Object.keys(cache).forEach(function(id) {
-				renderScriptCache[id] = cache[id];
-			});
-		});
-	});
-
-	document.getElementById('btnReload').addEventListener('click', function() {
-		var renderScriptCache = {};
-		renderScriptUrls.forEach(function(url) {
-			ScriptLoader.load(url, {}, function(err, script, cache) {
-				if (err) {
-					return console.log(err);
-				}
-				Object.keys(cache).forEach(function(id) {
-					renderScriptCache[id] = cache[id];
-				});
-			});
-		});
-	}, false);
-
 	var canvas = document.getElementById('mainCanvas');
 	var context = canvas.getContext('2d');
 
 	Math.seedrandom();
 
-	var behavior = RootBehavior;
-
-	canvas.addEventListener('mousedown', function(event) {
-		behavior = behavior('mousedown', getMousePos(canvas, event));
-	}, false);
-	document.addEventListener('mouseup', function(event) {
-		behavior = behavior('mouseup', getMousePos(canvas, event));
-	}, false);
-	canvas.addEventListener('mousemove', function(event) {
-		behavior = behavior('mousemove', getMousePos(canvas, event));
-	}, false);
+	var behavior = RootBehavior.init();
 
 	canvas.addEventListener('keydown', function(event) {
 		behavior = behavior('keydown', event);
@@ -139,13 +97,7 @@ function onload() {
 
 		context.clearRect(0, 0, canvas.width, canvas.height);
 
-		var graphics = {
-			context: context,
-			assets: {
-				renderScripts: renderScriptCache
-			}
-		};
-		behavior = behavior('draw', graphics);
+		behavior = behavior('draw', context);
 
 		// Frame time statistics
 		var BUFFER_SIZE = 100;
@@ -184,7 +136,7 @@ function onload() {
 </script>
 </head>
 <body onload="onload();">
-	<canvas id="mainCanvas" width="800" height="600" style="border-width:10px"></canvas>
+	<canvas id="mainCanvas" width="1024" height="768" style="border-width:10px"></canvas>
 	<input type="button" id="btnReload" name="btnReload" value="Reload">
 </body>
 </html>
