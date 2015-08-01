@@ -26,11 +26,24 @@ var RootBehavior = (function() {
 	var PLAYER_SPEED = 10;
 
 	function isPassable(tile) {
-		return (tile === 0);
+		return (tile.value === 0);
+	}
+
+	var TILE_HEALTH = {
+		0: 0,
+		1: 3,
+		2: 10
+	};
+	function tileHealth(tileValue) {
+		return TILE_HEALTH[tileValue];
 	}
 
 	function getTileAt(grid, gridPos) {
 		var columns = grid.columns;
+		var rows = Math.ceil(grid.data.length / columns);
+		if ((gridPos.x >= columns) || (gridPos.x < 0) || (gridPos.y >= rows) || (gridPos.y < 0)) {
+			return -1;
+		}
 		return grid.data[Math.floor(gridPos.y) * columns + Math.floor(gridPos.x)];
 	}
 
@@ -99,33 +112,24 @@ var RootBehavior = (function() {
 		}
 
 		var gridPos = Point.clone(player.gridPos);
+		var target = null;
 		if ((player.direction.x !== 0) && (direction.x === 0)) {
-			var targetX = (player.direction.x > 0 ? Math.ceil : Math.floor)(gridPos.x);
-			return {
-				target: Point.make(targetX, gridPos.y),
-				direction: direction
-			};
+			var targetX = Math.round(gridPos.x);
+			target = Point.make(targetX, gridPos.y);
 		} else if ((player.direction.y !== 0) && (direction.y === 0)) {
-			var targetY = (player.direction.y > 0 ? Math.ceil : Math.floor)(gridPos.y);
-			return {
-				target: Point.make(gridPos.x, targetY),
-				direction: direction
-			};
-		} else if ((player.direction.x !== direction.x) || (player.direction.y !== direction.y)) {
-			return {
-				direction: direction
-			}
+			var targetY = Math.round(gridPos.y);
+			target = Point.make(gridPos.x, targetY);
 		}
 
-		return null;
+		var newPlayer = world.entities.player.merge({
+			direction: direction,
+			target: target
+		});
+		return world.with(['entities', 'player'], newPlayer);
 	}
 
 	function changePlayerDirection(world, direction, target) {
 		var grid = world.entities.grid;
-
-		if ( target && !isPassable(getTileAt(grid, Vector.add(target, direction))) ) {
-			direction = Vector.make(0, 0);
-		}
 
 		var newPlayer = world.entities.player.merge({
 			direction: direction,
@@ -139,14 +143,9 @@ var RootBehavior = (function() {
 			var newWorld = world;
 
 			switch (eventType) {
+				case 'keypress': return main(keypress(world, data.keyCode));
 				case 'update': return main(update(world, data));
 				case 'draw': draw(world, data); break;
-				case 'keypress':
-					var change = keypress(world, data.keyCode);
-					if (change) {
-						return main(changePlayerDirection(world, change.direction, change.target));
-					}
-					break;
 			}
 
 			return main(world);
@@ -191,7 +190,11 @@ var RootBehavior = (function() {
 						tileSize: Size.make(16, 16),
 						columns: 64,
 						data: Array.apply(null, Array(64 * 48)).map(function() {
-							return Math.max(Math.floor(Math.random() * 10) - 7, 0);
+							var value = Math.max(Math.floor(Math.random() * 10) - 7, 0);
+							return {
+								value: value,
+								health: tileHealth(value)
+							};
 						}),
 						renderScript: 'tile-map'
 					},
@@ -200,7 +203,8 @@ var RootBehavior = (function() {
 						target: null,
 						direction: Point.make(0, 0),
 						size: 16,
-						renderScript: 'player'
+						renderScript: 'player',
+						hitCoolOff: 0
 					}
 				}
 			});

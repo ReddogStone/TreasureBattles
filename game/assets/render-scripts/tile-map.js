@@ -19,7 +19,7 @@ ScriptLoader.module(function() {
 			data.forEach(function(tile, index) {
 				var x = index % columns;
 				var y = Math.floor(index / columns);
-				context.fillStyle = TILE_COLORS[tile];
+				context.fillStyle = TILE_COLORS[tile.value];
 				context.fillRect(x * tileSize.x, y * tileSize.y, tileSize.x, tileSize.y);
 			});
 
