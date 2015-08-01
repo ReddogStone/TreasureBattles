@@ -24,9 +24,10 @@ var RootBehavior = (function() {
 	}
 
 	var PLAYER_SPEED = 10;
+	var PLAYER_HIT_COOL_OFF = 1;
 
 	function isPassable(tile) {
-		return (tile.value === 0);
+		return tile && (tile.value === 0);
 	}
 
 	var TILE_HEALTH = {
@@ -34,17 +35,38 @@ var RootBehavior = (function() {
 		1: 3,
 		2: 10
 	};
-	function tileHealth(tileValue) {
+	function initialTileHealth(tileValue) {
 		return TILE_HEALTH[tileValue];
 	}
 
-	function getTileAt(grid, gridPos) {
+	function getTileIndex(grid, gridPos) {
 		var columns = grid.columns;
 		var rows = Math.ceil(grid.data.length / columns);
 		if ((gridPos.x >= columns) || (gridPos.x < 0) || (gridPos.y >= rows) || (gridPos.y < 0)) {
 			return -1;
 		}
-		return grid.data[Math.floor(gridPos.y) * columns + Math.floor(gridPos.x)];
+		return Math.floor(gridPos.y) * columns + Math.floor(gridPos.x);
+	}
+
+	function getTileAt(grid, gridPos) {
+		var index = getTileIndex(grid, gridPos);
+		return (index >= 0) ? grid.data[index] : { value: -1, health: 0 };
+	}
+
+	function hitTile(grid, gridPos) {
+		var index = getTileIndex(grid, gridPos);
+		if (index < 0) { return grid; }
+
+		var data = grid.data;
+		var tile = data[index];
+		var newTileHealth = tile.health - 1;
+		if (newTileHealth <= 0) {
+			tile = { value: 0, health: 0 };
+		} else {
+			tile = { value: tile.value, health: newTileHealth };
+		}
+
+		return data.slice(0, index).concat([tile]).concat(data.slice(index + 1));
 	}
 
 	function getEffectiveGridPos(gridPos, dir) {
@@ -81,9 +103,16 @@ var RootBehavior = (function() {
 
 		newGridPos = Vector.add(newGridPos, Vector.mul(direction, PLAYER_SPEED * deltaTime));
 
+		var hitCoolOff = Math.max(player.hitCoolOff - deltaTime, 0);
+
 		var effectivePos = getEffectiveGridPos(newGridPos, direction);
 		if (!isPassable(getTileAt(grid, effectivePos))) {
 			newGridPos = getEffectiveGridPos(gridPos, direction);
+			if (hitCoolOff === 0) {
+				console.log('HIT');
+				grid = grid.with('data', hitTile(grid, effectivePos));
+				hitCoolOff = PLAYER_HIT_COOL_OFF;
+			}
 		}
 
 		var pos = [
@@ -95,9 +124,15 @@ var RootBehavior = (function() {
 		var newPlayer = player.merge({
 			pos: pos,
 			gridPos: newGridPos,
-			target: target
+			target: target,
+			hitCoolOff: hitCoolOff
 		});
-		return world.with(['entities', 'player'], newPlayer);
+
+		var newEntities = world.entities.merge({
+			player: newPlayer,
+			grid: grid
+		});
+		return world.with('entities', newEntities);
 	}
 
 	function keypress(world, keyCode) {
@@ -120,16 +155,6 @@ var RootBehavior = (function() {
 			var targetY = Math.round(gridPos.y);
 			target = Point.make(gridPos.x, targetY);
 		}
-
-		var newPlayer = world.entities.player.merge({
-			direction: direction,
-			target: target
-		});
-		return world.with(['entities', 'player'], newPlayer);
-	}
-
-	function changePlayerDirection(world, direction, target) {
-		var grid = world.entities.grid;
 
 		var newPlayer = world.entities.player.merge({
 			direction: direction,
@@ -193,7 +218,7 @@ var RootBehavior = (function() {
 							var value = Math.max(Math.floor(Math.random() * 10) - 7, 0);
 							return {
 								value: value,
-								health: tileHealth(value)
+								health: initialTileHealth(value)
 							};
 						}),
 						renderScript: 'tile-map'
