@@ -25,40 +25,63 @@ var RootBehavior = (function() {
 
 	var PLAYER_SPEED = 10;
 
+	function isPassable(tile) {
+		return (tile === 0);
+	}
+
+	function getTileAt(grid, gridPos) {
+		var columns = grid.columns;
+		return grid.data[Math.floor(gridPos.y) * columns + Math.floor(gridPos.x)];
+	}
+
+	function getEffectiveGridPos(gridPos, dir) {
+		var roundFunc = ((dir.x === -1) || (dir.y === -1)) ? Math.floor : Math.ceil;
+		return {
+			x: roundFunc(gridPos.x),
+			y: roundFunc(gridPos.y)
+		}
+	}
+
 	function update(world, deltaTime) {
 		var player = world.entities.player;
-		var tileMap = world.entities.background;
-		var tileSize = tileMap.tileSize;
+		var grid = world.entities.grid;
+		var tileSize = grid.tileSize;
 
 		var direction = player.direction;
 		var gridPos = player.gridPos;
 		var target = player.target;
 
+		var newGridPos = gridPos;
 		if (target) {
 			var delta = Vector.sub(target, gridPos);
 			var length = Vector.length(delta);
 
 			if (length <= PLAYER_SPEED * deltaTime) {
-				gridPos = Point.clone(target);
+				newGridPos = Point.clone(target);
 				target = null;
 				deltaTime -= length / PLAYER_SPEED;
 			} else {
-				gridPos = Vector.add(gridPos, Vector.mul(delta, PLAYER_SPEED * deltaTime / length));
+				newGridPos = Vector.add(gridPos, Vector.mul(delta, PLAYER_SPEED * deltaTime / length));
 				deltaTime = 0;
 			}
 		}
 
-		gridPos = Vector.add(gridPos, Vector.mul(direction, PLAYER_SPEED * deltaTime));
+		newGridPos = Vector.add(newGridPos, Vector.mul(direction, PLAYER_SPEED * deltaTime));
+
+		var effectivePos = getEffectiveGridPos(newGridPos, direction);
+		if (!isPassable(getTileAt(grid, effectivePos))) {
+			newGridPos = getEffectiveGridPos(gridPos, direction);
+		}
 
 		var pos = [
-			tileMap.pos,
-			Vector.make(gridPos.x * tileSize.x, gridPos.y * tileSize.y),
+			grid.pos,
+			Vector.make(newGridPos.x * tileSize.x, newGridPos.y * tileSize.y),
 			Vector.mul(tileSize, 0.5)
 		].reduce(Vector.add);
 
 		var newPlayer = player.merge({
 			pos: pos,
-			gridPos: gridPos,
+			gridPos: newGridPos,
 			target: target
 		});
 		return world.with(['entities', 'player'], newPlayer);
@@ -78,20 +101,36 @@ var RootBehavior = (function() {
 		var gridPos = Point.clone(player.gridPos);
 		if ((player.direction.x !== 0) && (direction.x === 0)) {
 			var targetX = (player.direction.x > 0 ? Math.ceil : Math.floor)(gridPos.x);
-			target = Point.make(targetX, gridPos.y);
+			return {
+				target: Point.make(targetX, gridPos.y),
+				direction: direction
+			};
 		} else if ((player.direction.y !== 0) && (direction.y === 0)) {
 			var targetY = (player.direction.y > 0 ? Math.ceil : Math.floor)(gridPos.y);
-			target = Point.make(gridPos.x, targetY);
-		} else {
-			target = null;
+			return {
+				target: Point.make(gridPos.x, targetY),
+				direction: direction
+			};
+		} else if ((player.direction.x !== direction.x) || (player.direction.y !== direction.y)) {
+			return {
+				direction: direction
+			}
 		}
 
-		var newPlayer = player.merge({
-			gridPos: gridPos,
+		return null;
+	}
+
+	function changePlayerDirection(world, direction, target) {
+		var grid = world.entities.grid;
+
+		if ( target && !isPassable(getTileAt(grid, Vector.add(target, direction))) ) {
+			direction = Vector.make(0, 0);
+		}
+
+		var newPlayer = world.entities.player.merge({
 			direction: direction,
 			target: target
 		});
-
 		return world.with(['entities', 'player'], newPlayer);
 	}
 
@@ -102,7 +141,12 @@ var RootBehavior = (function() {
 			switch (eventType) {
 				case 'update': return main(update(world, data));
 				case 'draw': draw(world, data); break;
-				case 'keypress': return main(keypress(world, data.keyCode));
+				case 'keypress':
+					var change = keypress(world, data.keyCode);
+					if (change) {
+						return main(changePlayerDirection(world, change.direction, change.target));
+					}
+					break;
 			}
 
 			return main(world);
@@ -142,11 +186,13 @@ var RootBehavior = (function() {
 					renderScripts: renderScriptCache
 				},
 				entities: {
-					background: {
+					grid: {
 						pos: Point.make(0, 0),
 						tileSize: Size.make(16, 16),
 						columns: 64,
-						data: Array.apply(null, Array(64 * 48)).map(function() { return Math.floor(Math.random() * 3); }),
+						data: Array.apply(null, Array(64 * 48)).map(function() {
+							return Math.max(Math.floor(Math.random() * 10) - 7, 0);
+						}),
 						renderScript: 'tile-map'
 					},
 					player: {
