@@ -93,11 +93,11 @@ function onload() {
 		var deltaTime = time - lastTime;
 		lastTime = time;
 
-		behavior = behavior('update', deltaTime);
+		behavior = behavior('update', { deltaTime: deltaTime, time: time });
 
 		context.clearRect(0, 0, canvas.width, canvas.height);
 
-		behavior = behavior('draw', context);
+		behavior = behavior('draw', { time: time, context: context });
 
 		// Frame time statistics
 		var BUFFER_SIZE = 100;
