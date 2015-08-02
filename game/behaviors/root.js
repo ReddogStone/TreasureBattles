@@ -124,7 +124,6 @@ var RootBehavior = (function() {
 		var grid = world.entities.grid;
 		var tileSize = grid.tileSize;
 
-		var hitCoolOff = Math.max(player.hitCoolOff - deltaTime, 0);
 		var result = movePlayer(grid, player.gridPos, player.direction, player.target, deltaTime);
 
 		var newGridPos = result.pos;
@@ -134,11 +133,12 @@ var RootBehavior = (function() {
 		if (result.hitWallAt) {
 			if (!state.hit) {
 				state = { hit: time };
-			}
-
-			if (hitCoolOff === 0) {
-				grid = grid.with('data', hitTile(grid, result.hitWallAt));
-				hitCoolOff = PLAYER_HIT_COOL_OFF;
+			} else {
+				var dt = time - state.hit;
+				if (dt >= PLAYER_HIT_COOL_OFF) {
+					grid = grid.with('data', hitTile(grid, result.hitWallAt));
+					state = { hit: time };
+				}
 			}
 		} else if (!state.move) {
 			state = { move: time };
@@ -154,7 +154,6 @@ var RootBehavior = (function() {
 			pos: pos,
 			gridPos: newGridPos,
 			target: target,
-			hitCoolOff: hitCoolOff,
 			state: state
 		});
 
@@ -259,7 +258,6 @@ var RootBehavior = (function() {
 						direction: Point.make(0, 0),
 						size: 16,
 						renderScript: 'player',
-						hitCoolOff: 0,
 						state: { stand: 0 }
 					}
 				}

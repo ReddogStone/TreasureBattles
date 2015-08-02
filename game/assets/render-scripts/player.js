@@ -12,7 +12,7 @@ ScriptLoader.module(function() {
 			var pos = player.pos;
 			if (state.hit) {
 				var dt = time - state.hit;
-				var offset = Math.cos(10 * dt) + 1;
+				var offset = 2 * (Math.cos(2 * dt * 2 * Math.PI) + 1);
 				var dir = player.direction;
 				pos.x += dir.x * offset;
 				pos.y += dir.y * offset;
