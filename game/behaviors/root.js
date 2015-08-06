@@ -3,28 +3,44 @@ var RootBehavior = (function() {
 		return 'game/assets/render-scripts/' + scriptName + '.js';
 	}
 
+	function getRenderList(world) {
+		var grid = world.entities.grid;
+		var player = world.entities.player;
+
+		var gridPos = player.gridPos;
+		var tileSize = grid.tileSize;
+
+		var pos = [
+			grid.pos,
+			Vector.make(gridPos.x * tileSize.x, gridPos.y * tileSize.y),
+			Vector.mul(tileSize, 0.5)
+		].reduce(Vector.add);
+
+		return [grid, player.with('pos', pos)];
+	}
+
 	function draw(world, context, time) {
 		var assets = world.assets;
 
-		world.entities.forEach(function(id, entity) {
+		getRenderList(world).forEach(function(entity) {
 			var render = assets.renderScripts[getScriptPath(entity.renderScript)];
 			render && render.default && render.default(context, entity, time);
 		});
 
-		var player = world.entities.player;
-		context.font = 'normal 1em Trebuchet';
-		context.fillStyle = 'black';
-		context.fillRect(0, 0, 300, 70);
-		context.fillStyle = 'white';
-		context.textAlign = 'left';
-		context.textBaseline = 'top';
-		context.fillText(JSON.stringify(player.direction), 10, 10);
-		context.fillText(JSON.stringify(player.target), 10, 30);
-		context.fillText(JSON.stringify(player.gridPos), 10, 50);
+		// var player = world.entities.player;
+		// context.font = 'normal 1em Trebuchet';
+		// context.fillStyle = 'black';
+		// context.fillRect(0, 0, 300, 70);
+		// context.fillStyle = 'white';
+		// context.textAlign = 'left';
+		// context.textBaseline = 'top';
+		// context.fillText(JSON.stringify(player.direction), 10, 10);
+		// context.fillText(JSON.stringify(player.target), 10, 30);
+		// context.fillText(JSON.stringify(player.gridPos), 10, 50);
 	}
 
 	var PLAYER_SPEED = 10;
-	var PLAYER_HIT_COOL_OFF = 1;
+	var PLAYER_HIT_COOL_OFF = 0.5;
 
 	function isPassable(tile) {
 		return tile && (tile.value === 0);
@@ -144,14 +160,7 @@ var RootBehavior = (function() {
 			state = { move: time };
 		}
 
-		var pos = [
-			grid.pos,
-			Vector.make(newGridPos.x * tileSize.x, newGridPos.y * tileSize.y),
-			Vector.mul(tileSize, 0.5)
-		].reduce(Vector.add);
-
 		player = player.merge({
-			pos: pos,
 			gridPos: newGridPos,
 			target: target,
 			state: state
@@ -256,7 +265,7 @@ var RootBehavior = (function() {
 						gridPos: Point.make(62, 46),
 						target: null,
 						direction: Point.make(0, 0),
-						size: 16,
+						size: 12,
 						renderScript: 'player',
 						state: { stand: 0 }
 					}
