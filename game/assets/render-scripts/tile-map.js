@@ -1,9 +1,9 @@
 ScriptLoader.module(function() {
 
 	var TILE_COLORS = {
-		0: 'brown',
+		0: '#A07060',
 		1: 'darkgray',
-		2: 'darkred'
+		2: 'darkgreen'
 	};
 
 	return {

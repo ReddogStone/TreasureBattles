@@ -3,20 +3,28 @@ var RootBehavior = (function() {
 		return 'game/assets/render-scripts/' + scriptName + '.js';
 	}
 
+	function gridToWorld(gridPos, tileSize, offset) {
+		return [
+			offset,
+			Vector.make(gridPos.x * tileSize.x, gridPos.y * tileSize.y),
+			Vector.mul(tileSize, 0.5)
+		].reduce(Vector.add);
+	}
+
 	function getRenderList(world) {
 		var grid = world.entities.grid;
 		var player = world.entities.player;
 
-		var gridPos = player.gridPos;
 		var tileSize = grid.tileSize;
 
-		var pos = [
-			grid.pos,
-			Vector.make(gridPos.x * tileSize.x, gridPos.y * tileSize.y),
-			Vector.mul(tileSize, 0.5)
-		].reduce(Vector.add);
+		var bombs = world.entities.bombs.map(function(bomb) {
+			return bomb.with('pos', gridToWorld(bomb.gridPos, tileSize, grid.pos));
+		});
 
-		return [grid, player.with('pos', pos)];
+		return [
+			grid,
+			player.with('pos', gridToWorld(player.gridPos, tileSize, grid.pos))
+		].concat(bombs);
 	}
 
 	function draw(world, context, time) {
@@ -27,20 +35,24 @@ var RootBehavior = (function() {
 			render && render.default && render.default(context, entity, time);
 		});
 
-		// var player = world.entities.player;
-		// context.font = 'normal 1em Trebuchet';
-		// context.fillStyle = 'black';
-		// context.fillRect(0, 0, 300, 70);
-		// context.fillStyle = 'white';
-		// context.textAlign = 'left';
-		// context.textBaseline = 'top';
-		// context.fillText(JSON.stringify(player.direction), 10, 10);
+		var player = world.entities.player;
+		context.font = 'normal 1em Trebuchet';
+		context.fillStyle = 'black';
+		context.fillRect(0, 0, 300, 70);
+		context.fillStyle = 'white';
+		context.textAlign = 'left';
+		context.textBaseline = 'top';
+		context.fillText(JSON.stringify(player.health), 10, 10);
 		// context.fillText(JSON.stringify(player.target), 10, 30);
 		// context.fillText(JSON.stringify(player.gridPos), 10, 50);
 	}
 
 	var PLAYER_SPEED = 10;
-	var PLAYER_HIT_COOL_OFF = 0.5;
+	var PLAYER_HIT_PERIOD = 0.5;
+
+	var BOMB_IGNITION_TIME = 2.0;
+	var BOMB_RANGE = 3.0;
+	var BOMB_POWER = 10.0;
 
 	function isPassable(tile) {
 		return tile && (tile.value === 0);
@@ -69,14 +81,14 @@ var RootBehavior = (function() {
 		return (index >= 0) ? grid.data[index] : { value: -1, health: 0 };
 	}
 
-	function hitTile(grid, gridPos) {
+	function hitTile(grid, gridPos, power) {
 		var index = getTileIndex(grid, gridPos);
-		if (index < 0) { return grid; }
+		if (index < 0) { return grid.data; }
 
 		var data = grid.data;
 		var tile = data[index];
 
-		var newTileHealth = tile.health - 1;
+		var newTileHealth = tile.health - power;
 		if (newTileHealth <= 0) {
 			tile = { value: 0, health: 0 };
 		} else {
@@ -135,6 +147,65 @@ var RootBehavior = (function() {
 		return { pos: newGridPos, target: target };
 	}
 
+	function bombExploded(state, time) {
+		if (state.ignite !== undefined) {
+			if ((time - state.ignite) > BOMB_IGNITION_TIME) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	function markExploded(bombs, time) {
+		return bombs.map(function(bomb) {
+			var state = bomb.state;
+			if (bombExploded(state, time)) {
+				state = { exploded: time };
+			}
+			return bomb.with('state', state);
+		});
+	}
+
+	function removeDeadBombs(bombs, time) {
+		return bombs.filter(function(bomb) {
+			return !bomb.state.exploded;
+		});
+	}
+
+	function damageGrid(grid, bombs, time) {
+		var exploded = bombs.filter(function(bomb) { return bomb.state.exploded <= time});
+		exploded.forEach(function(bomb) {
+			var gridPos = bomb.gridPos;
+
+			var range = BOMB_RANGE;
+			for (var x = -range; x <= range; x++) {
+				for (var y = -range; y <= range; y++) {
+					grid = grid.with( 'data', hitTile(grid, Vector.add(gridPos, Vector.make(x, y)), BOMB_POWER) );
+				}
+			}
+		});
+
+		return grid;
+	}
+
+	function damagePlayer(player, bombs, time) {
+		var playerGridPos = player.gridPos;
+		var health = player.health;
+
+		var exploded = bombs.filter(function(bomb) { return bomb.state.exploded <= time});
+		exploded.forEach(function(bomb) {
+			var gridPos = bomb.gridPos;
+			var dx = Math.abs(playerGridPos.x - gridPos.x);
+			var dy = Math.abs(playerGridPos.y - gridPos.y);
+			if ((dx <= BOMB_RANGE) && (dy < BOMB_RANGE)) {
+				health -= BOMB_POWER;
+			}
+		});
+
+		return player.with('health', health);
+	}
+
 	function update(world, deltaTime, time) {
 		var player = world.entities.player;
 		var grid = world.entities.grid;
@@ -151,8 +222,8 @@ var RootBehavior = (function() {
 				state = { hit: time };
 			} else {
 				var dt = time - state.hit;
-				if (dt >= PLAYER_HIT_COOL_OFF) {
-					grid = grid.with('data', hitTile(grid, result.hitWallAt));
+				if (dt >= PLAYER_HIT_PERIOD) {
+					grid = grid.with('data', hitTile(grid, result.hitWallAt, 1));
 					state = { hit: time };
 				}
 			}
@@ -166,14 +237,20 @@ var RootBehavior = (function() {
 			state: state
 		});
 
+		var bombs = markExploded(world.entities.bombs, time);
+		grid = damageGrid(grid, bombs, time);
+		player = damagePlayer(player, bombs, time);
+		bombs = removeDeadBombs(bombs, time);
+
 		var newEntities = world.entities.merge({
 			player: player,
-			grid: grid
+			grid: grid,
+			bombs: bombs
 		});
 		return world.with('entities', newEntities);
 	}
 
-	function keypress(world, keyCode) {
+	function keypress(world, keyCode, time) {
 		var player = world.entities.player;
 		var direction = player.direction;
 
@@ -198,7 +275,22 @@ var RootBehavior = (function() {
 			direction: direction,
 			target: target
 		});
-		return world.with(['entities', 'player'], newPlayer);
+
+		var bombs = world.entities.bombs;
+		if (keyCode === 32) {
+			bombs = bombs.concat({
+				gridPos: Point.make(Math.floor(gridPos.x), Math.floor(gridPos.y)),
+				state: { ignite: time },
+				renderScript: 'bomb'
+			});
+		}
+
+		var newEntities = world.entities.merge({
+			player: newPlayer,
+			bombs: bombs
+		});
+
+		return world.with('entities', newEntities);
 	}
 
 	function main(world) {
@@ -206,7 +298,7 @@ var RootBehavior = (function() {
 			var newWorld = world;
 
 			switch (eventType) {
-				case 'keypress': return main(keypress(world, data.keyCode));
+				case 'keydown': return main(keypress(world, data.keyCode, data.time));
 				case 'update': return main(update(world, data.deltaTime, data.time));
 				case 'draw': draw(world, data.context, data.time); break;
 			}
@@ -218,6 +310,7 @@ var RootBehavior = (function() {
 	var renderScriptUrls = [
 		'tile-map',
 		'player',
+		'bomb'
 	].map(getScriptPath);
 
 	var renderScriptCache = {};
@@ -250,7 +343,7 @@ var RootBehavior = (function() {
 				entities: {
 					grid: {
 						pos: Point.make(0, 0),
-						tileSize: Size.make(16, 16),
+						tileSize: Size.make(12, 12),
 						columns: 64,
 						data: Array.apply(null, Array(64 * 48)).map(function() {
 							var value = Math.max(Math.floor(Math.random() * 2) + 1, 0);
@@ -267,8 +360,16 @@ var RootBehavior = (function() {
 						direction: Point.make(0, 0),
 						size: 12,
 						renderScript: 'player',
-						state: { stand: 0 }
-					}
+						state: { stand: 0 },
+						health: 100
+					},
+					bombs: [
+						{
+							gridPos: Point.make(58, 46),
+							state: { ignite: 0 },
+							renderScript: 'bomb'
+						}
+					]
 				}
 			});
 		}

@@ -76,14 +76,14 @@ function onload() {
 
 	var behavior = RootBehavior.init();
 
-	canvas.addEventListener('keydown', function(event) {
-		behavior = behavior('keydown', event);
+	document.addEventListener('keydown', function(event) {
+		behavior = behavior('keydown', { keyCode: event.keyCode, time: Time.now() * 0.001 });
 	}, false);
 	document.addEventListener('keypress', function(event) {
-		behavior = behavior('keypress', event);
+		behavior = behavior('keypress', { keyCode: event.keyCode, time: Time.now() * 0.001 });
 	}, false);
-	canvas.addEventListener('keyup', function(event) {
-		behavior = behavior('keyup', event);
+	document.addEventListener('keyup', function(event) {
+		behavior = behavior('keyup', { keyCode: event.keyCode, time: Time.now() * 0.001 });
 	}, false);
 
 	var lastTime = Time.now() * 0.001;
@@ -136,7 +136,7 @@ function onload() {
 </script>
 </head>
 <body onload="onload();">
-	<canvas id="mainCanvas" width="1024" height="768" style="border-width:10px"></canvas>
+	<canvas id="mainCanvas" width="800" height="600" style="border-width:10px"></canvas>
 	<input type="button" id="btnReload" name="btnReload" value="Reload">
 </body>
 </html>
